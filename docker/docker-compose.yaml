@@ -1,52 +1,114 @@
-version: '3.8'
 services:
-  airflow-webserver:
-    image: apache/airflow:2.7.0
-    container_name: airflow-webserver
-    restart: always
+  init-airflow:
+    image: apache/airflow:2.7.2-python3.9
+    env_file:
+      - .env
+    depends_on:
+      - postgres
     environment:
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW_EXECUTOR}
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
-    ports:
-      - "8080:8080"
-    command: webserver
+      - ./requirements.txt:/requirements.txt
+      - ${PATH_DATALAKE_TIME}:${VOLUME_DATALAKE_TIME}
+      - ${PATH_DATALAKE_FRITZ}:${VOLUME_DATALAKE_FRITZ}
+      - ${PATH_DATALAKE_DOWN}:${VOLUME_DATALAKE_DOWN}
+      - ${PATH_DATALAKE_WD8}:${VOLUME_DATALAKE_WD8}
+      - ${PATH_DATALAKE_MINI}:${VOLUME_DATALAKE_MINI}
+    command: ["airflow", "db", "init"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
-  airflow-scheduler:
-    image: apache/airflow:2.7.0
-    container_name: airflow-scheduler
+  postgres:
+    image: postgres:13
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  webserver:
+    image: apache/airflow:2.7.2-python3.9
+    env_file:
+      - .env
     restart: always
     depends_on:
-      - airflow-webserver
-    environment:
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - postgres
+      - scheduler
+    ports:
+      - "8080:8080"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
-    command: scheduler
+      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./requirements.txt:/requirements.txt
+      - ${PATH_DATALAKE_TIME}:${VOLUME_DATALAKE_TIME}
+      - ${PATH_DATALAKE_FRITZ}:${VOLUME_DATALAKE_FRITZ}
+      - ${PATH_DATALAKE_DOWN}:${VOLUME_DATALAKE_DOWN}
+      - ${PATH_DATALAKE_WD8}:${VOLUME_DATALAKE_WD8}
+      - ${PATH_DATALAKE_MINI}:${VOLUME_DATALAKE_MINI}
+    entrypoint: ["/entrypoint.sh"]
+    environment:
+      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW_EXECUTOR}
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW_LOAD_EXAMPLES}
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f /opt/airflow/airflow-webserver.pid ]"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    command: ["webserver"]
 
-  airflow-init:
-    image: apache/airflow:2.7.0
-    container_name: airflow-init
-    entrypoint: ["/bin/bash", "-c", "airflow db init"]
-    environment:
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+  scheduler:
+    image: apache/airflow:2.7.2-python3.9
+    env_file:
+      - .env
+    restart: always
+    depends_on:
+      - postgres
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
+      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./requirements.txt:/requirements.txt
+      - ${PATH_DATALAKE_TIME}:${VOLUME_DATALAKE_TIME}
+      - ${PATH_DATALAKE_FRITZ}:${VOLUME_DATALAKE_FRITZ}
+      - ${PATH_DATALAKE_DOWN}:${VOLUME_DATALAKE_DOWN}
+      - ${PATH_DATALAKE_WD8}:${VOLUME_DATALAKE_WD8}
+      - ${PATH_DATALAKE_MINI}:${VOLUME_DATALAKE_MINI}
+    entrypoint: ["/entrypoint.sh"]
+    environment:
+      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW_EXECUTOR}
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW_LOAD_EXAMPLES}
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    command: ["scheduler"]
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'airflow scheduler' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 volumes:
-  dags:
-  logs:
-  plugins:
-
+  postgres_data:
