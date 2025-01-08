@@ -31,11 +31,3 @@ def concat_files(output_file, input_files, delete_input_files=True):
     if delete_input_files:
         for file in input_files:
             del_file(file)
-
-def unzip_file(file_path, extract_path, delete_zip=True):
-    # Unzip file
-    with zipfile.ZipFile(file_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_path)
-    logger.info(f"Unzipped {file_path} to {extract_path}")
-    if delete_zip:
-        del_file(file_path)

@@ -10,6 +10,7 @@ logger = setup_logger(__name__)
 def download_zip_file(url, file_path, file_name=None, ua=None):
     if ua is not None:
         try:
+            logger.info(f"Trying to download with User Agent {ua}")
             with requests.get(url, headers={"User-Agent": ua}, stream=True) as response:
                 # Check for HTTP errors (4xx, 5xx status codes)
                 response.raise_for_status()  # This will raise HTTPError for bad responses

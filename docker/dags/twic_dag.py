@@ -9,7 +9,8 @@ from urllib.request import urlretrieve, URLError
 from datetime import datetime
 from libs.requests_lib import download_zip_file
 from libs.config_lib import read_chess_config
-from libs.file_lib import ensure_folder_exists, del_file, unzip_file
+from libs.file_lib import ensure_folder_exists
+from libs.zip_lib import unzip_file
 
 from libs.logging_lib import setup_logger
 logger = setup_logger(__name__) 
@@ -37,6 +38,8 @@ for folder in [zst_folder, pgn_folder]:
 MAX_MISSING_TWIC = int(config.get("MAX_MISSING_TWIC", 1))
 DEFAULT_NEXT_TWIC_NR = int(config.get("START_TWIC_NR", 1565))
 
+UA = config.get("User-Agent")
+
 def get_next_twic_nr(ti):
     """
     Retrieve the last downloaded year and month from Airflow's XCom.
@@ -55,7 +58,7 @@ def download_twic_archive(twic_number, **kwargs):
         url = f"{BASE_URL_TWIC}{twic_number}g.zip"
         file_path = os.path.join(zst_folder, f"twic{twic_number}.zip")
         logger.info(f"Attempting to download {url}")
-        download_zip_file(url, file_path, config.get("User-Agent"))
+        download_zip_file(url, file_path, ua=UA)
         logger.info(f"Successfully downloaded archive {twic_number} to {file_path}")
         ti.xcom_push(key=f"twic_{twic_number}_file_path", value=file_path)
         ti.xcom_push(key='latest_twic_nr', value=twic_number)
