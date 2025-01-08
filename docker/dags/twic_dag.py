@@ -2,36 +2,24 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'libs')))
 
-import json
-import logging
 import zipfile
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from urllib.request import urlretrieve, URLError
 from datetime import datetime
-from requests_lib import download_zip_file
+from libs.requests_lib import download_zip_file
+from libs.config_lib import read_chess_config
+from libs.file_lib import ensure_folder_exists, del_file, unzip_file
 
-# Get logger
-logger = logging.getLogger(__name__)
-
-# Get the container's hostname
-container_name = os.getenv('HOSTNAME')  # This returns the container's hostname
-
-# Log the container name
-logging.info(f"Running on container: {container_name}")
-
+from libs.logging_lib import setup_logger
+logger = setup_logger(__name__) 
 # Load configuration from the JSON file
-CONFIG_PATH = '/opt/airflow/dags/configs/config.json'
-try:
-    with open(CONFIG_PATH) as config_file:
-        config = json.load(config_file)
-except FileNotFoundError:
-    raise Exception(f"Configuration file not found at {CONFIG_PATH}")
+config = read_chess_config()
 
 # Retrieve and validate values from the config
-BASE_URL = config.get("BASE_URL")
-logger.info(f"BASE_URL: {BASE_URL}")
-if not BASE_URL:
+BASE_URL_TWIC = config.get("BASE_URL_TWIC")
+logger.info(f"BASE_URL: {BASE_URL_TWIC}")
+if not BASE_URL_TWIC:
     raise ValueError("BASE_URL is missing in the configuration file.")
 
 VOLUME_TWIC = os.getenv(config.get("VOLUME_TWIC"))
@@ -40,14 +28,22 @@ if not VOLUME_TWIC:
     raise ValueError(f"Environment variable {config.get('VOLUME_TWIC')} is not set.")
 
 TWIC_FOLDER = os.path.join(VOLUME_TWIC, config.get("TWIC_FOLDER"))
-logger.info(f"TWIC_FOLDER: {TWIC_FOLDER}")
-if not os.path.exists(TWIC_FOLDER):
-    logger.info(f"Creating folder {TWIC_FOLDER}")
-    os.makedirs(TWIC_FOLDER, exist_ok=True)
-else:
-    logger.info(f"Folder {TWIC_FOLDER} already exists") 
+zst_folder = os.path.join(TWIC_FOLDER, config.get("SUB_FOLDER_ZST"))
+pgn_folder = os.path.join(TWIC_FOLDER, config.get("SUB_FOLDER_UNZIPPED"))
+
+for folder in [zst_folder, pgn_folder]:
+    ensure_folder_exists(folder)
 
 MAX_MISSING_TWIC = int(config.get("MAX_MISSING_TWIC", 1))
+DEFAULT_NEXT_TWIC_NR = int(config.get("START_TWIC_NR", 1565))
+
+def get_next_twic_nr(ti):
+    """
+    Retrieve the last downloaded year and month from Airflow's XCom.
+    If not found, use default values.
+    """
+    last_twic_nr = ti.xcom_pull(key='last_twic_nr', task_ids='download_and_unzip_twic_archives', default=DEFAULT_NEXT_TWIC_NR)
+    return last_twic_nr+1
 
 def download_twic_archive(twic_number, **kwargs):
     """
@@ -56,21 +52,21 @@ def download_twic_archive(twic_number, **kwargs):
     logger.info(f"Start Downloading TWIC archive {twic_number}")  
     ti = kwargs['ti']
     try:
-        url = f"{BASE_URL}{twic_number}g.zip"
-        file_path = os.path.join(TWIC_FOLDER, f"twic{twic_number}.zip")
+        url = f"{BASE_URL_TWIC}{twic_number}g.zip"
+        file_path = os.path.join(zst_folder, f"twic{twic_number}.zip")
         logger.info(f"Attempting to download {url}")
         download_zip_file(url, file_path, config.get("User-Agent"))
         logger.info(f"Successfully downloaded archive {twic_number} to {file_path}")
         ti.xcom_push(key=f"twic_{twic_number}_file_path", value=file_path)
-        ti.xcom_push(key='latest_twic_number', value=twic_number)
+        ti.xcom_push(key='latest_twic_nr', value=twic_number)
+        unzip_twic_archive(twic_number, **kwargs)
     except Exception as e:
         logger.error(f"Failed to download {url}: {e}")
         raise FileNotFoundError(f"TWIC archive {twic_number} not found at {url}.")
 
-
 def unzip_twic_archive(twic_number, **kwargs):
     """
-    Unzips a TWIC archive.
+    Unzips a TWIC archive and deletes the archive after successful extraction.
     """
     logger.info(f"Start unzip TWIC archive {twic_number}")  
     ti = kwargs['ti']
@@ -79,17 +75,16 @@ def unzip_twic_archive(twic_number, **kwargs):
     if not file_path:
         raise ValueError(f"No file path found for TWIC {twic_number} in XCom.")
 
-    extract_path = os.path.join(TWIC_FOLDER, f"twic{twic_number}")
+    extract_path = pgn_folder
     logger.info(f"Extracting {file_path} to {extract_path} {twic_number}")  
     os.makedirs(extract_path, exist_ok=True)
 
     try:
-        with zipfile.ZipFile(file_path, 'r') as zip_ref:
-            zip_ref.extractall(extract_path)
-        logger.info(f"Successfully extracted TWIC {twic_number} to {extract_path}")
+        unzip_file(file_path, extract_path)
+        return
     except zipfile.BadZipFile as e:
         logger.error(f"Error extracting {file_path}: {e}")
-        raise
+    raise
 
 def find_and_download_archives(**kwargs):
     """
@@ -98,20 +93,18 @@ def find_and_download_archives(**kwargs):
     """
     logger.info(f"Start Finding TWIC archive")
     ti = kwargs['ti']  # Airflow task instance
-    missing_count = 0
-    current_twic_number = ti.xcom_pull(key='latest_twic_number', task_ids='download_all_twic_archives', default=1565)
-
-    while missing_count < MAX_MISSING_TWIC:
+    current_twic_number = get_next_twic_nr(ti)
+    go_on = True
+    while go_on:
         try:
             download_twic_archive(current_twic_number, **kwargs)
-            missing_count = 0  # Reset missing count on success
             current_twic_number += 1
         except Exception:
-            missing_count += 1
-            logger.warning(f"Archive {current_twic_number} is missing. Missing count: {missing_count}")
+            go_on = False
+            logger.warning(f"Archive {current_twic_number} is missing. Stopping Downloading")
         
-    ti.xcom_push(key='latest_twic_number', value=current_twic_number)
-    logger.info(f"Stopped downloading after {MAX_MISSING_TWIC} consecutive missing archives for TWIC {current_twic_number}.")
+    ti.xcom_push(key='latest_twic_number', value=current_twic_number-1)
+    logger.info(f"Stopped downloading after TWIC {current_twic_number-1}.")
 
 # Set up the DAG
 dag = DAG(
@@ -126,19 +119,6 @@ dag = DAG(
 download_archives_task = PythonOperator(
     task_id='download_all_twic_archives',
     python_callable=find_and_download_archives,
-    op_args=[],  # Starting TWIC number
     provide_context=True,
     dag=dag,
 )
-
-# Task to unzip TWIC archives
-unzip_task = PythonOperator(
-    task_id='unzip_twic_archive',
-    python_callable=unzip_twic_archive,
-    op_args=[1565],  # Replace with dynamic handling for different archives
-    provide_context=True,
-    dag=dag,
-)
-
-# Define task dependencies
-download_archives_task >> unzip_task

@@ -1,0 +1,17 @@
+{
+    "Version": "1.0",
+    "START_TWIC_NR": 1565,
+    "VOLUME_TWIC": "VOLUME_DATALAKE_MINI",
+    "VOLUME_IMPORT": "VOLUME_DATALAKE_FRITZ",
+    "TWIC_FOLDER": "chess/twic",
+    "ICCF_FOLDER": "chess/iccf",
+    "SUB_FOLDER_UNZIPPED": "pgn",
+    "FOLDER_IMPORT": "chess_import",
+    "BASE_URL_TWIC": "https://theweekinchess.com/zips/twic",
+    "VOLUME_ICCF": "VOLUME_DATALAKE_MINI",
+    "BASE_URL_ICCF": "https://gamesarchive.iccf.com/archive",
+    "MAX_MISSING_TWIC": 1,
+    "SUB_FOLDER_ZST": "zst",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36 Edge/16.16299" 
+}
+  
