@@ -1,3 +1,5 @@
+version: '3.8'  # Ensure you're using a compatible version
+
 services:
   init-airflow:
     image: apache/airflow:2.7.2-python3.9
@@ -109,6 +111,20 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+
+  dj_dfm:
+    image: django:3.2  # Specify the Django version
+    build:
+      context: /Users/littlecapa/GIT/django/dj_dfm  # Path to your Django app
+    volumes:
+      - /Users/littlecapa/GIT/django:/app  # Mount the django directory
+    ports:
+      - "8000:8000"  # Expose port for Django app
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}  # Use existing PostgreSQL DB
+    depends_on:
+      - postgres  # Ensure postgres is started before Django
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]  # Command to run your app
 
 volumes:
   postgres_data:
