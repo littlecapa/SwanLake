@@ -1,0 +1,22 @@
+# Specify the base image
+FROM python:3.9-slim
+
+# Set the working directory
+WORKDIR /app/dj_dfm
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+# Copy the requirements file and install dependencies
+COPY requirements.txt /app/dj_dfm/
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the entire Django project into the container
+COPY . /app/dj_dfm/
+
+# Grant execute permission for the startup script
+COPY startup_django.sh /app/startup_django.sh
+RUN chmod +x /app/startup_django.sh
+
+# Set the default entrypoint to the startup script
+ENTRYPOINT ["sh", "/app/startup_django.sh"]

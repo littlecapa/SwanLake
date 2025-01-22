@@ -114,17 +114,21 @@ services:
 
   dj_dfm:
     image: django:3.2  # Specify the Django version
+    env_file:
+    - .env
     build:
-      context: /Users/littlecapa/GIT/django/dj_dfm  # Path to your Django app
-    volumes:
-      - /Users/littlecapa/GIT/django:/app  # Mount the django directory
+      context: .
+      dockerfile: Dockerfile_Django
     ports:
-      - "8000:8000"  # Expose port for Django app
+      - "${LOCAL_PORT}:8000"  # Expose port for Django app
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}  # Use existing PostgreSQL DB
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
     depends_on:
       - postgres  # Ensure postgres is started before Django
-    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]  # Command to run your app
+    volumes:
+      - ./startup_django.sh:/app/startup_django.sh:ro  # Mount the startup script
+    entrypoint: ["sh", "/app/startup_django.sh"]
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 
 volumes:
   postgres_data:
