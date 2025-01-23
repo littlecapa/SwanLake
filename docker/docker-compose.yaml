@@ -112,7 +112,7 @@ services:
       timeout: 10s
       retries: 5
 
-  dj_dfm:
+  dj-dfm:
     image: django:3.2  # Specify the Django version
     env_file:
     - .env
