@@ -38,7 +38,7 @@ for folder in [zst_folder, pgn_folder]:
 MAX_MISSING_TWIC = int(config.get("MAX_MISSING_TWIC", 1))
 DEFAULT_NEXT_TWIC_NR = int(config.get("START_TWIC_NR", 1565))
 
-UA = config.get("User-Agent")
+UA = config.get("USER_AGENT")
 
 def get_next_twic_nr(ti):
     """

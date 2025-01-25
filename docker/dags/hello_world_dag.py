@@ -1,35 +1,40 @@
+from airflow.operators.python import PythonOperator
 from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
 from datetime import datetime
 from libs.logging_lib import setup_logger
-logger = setup_logger(__name__) 
+from libs.config_lib import read_chess_config
 
-# Define the default arguments for the DAG
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'retries': 1,
-}
+logger = setup_logger(__name__)
+
+def log_all_xcoms(**kwargs):
+    logger.info(f"Hello World DAG")
+    # Load configuration from the JSON file
+    config = read_chess_config()
+    logger.info(f"Configuration: {config}")
+    ti = kwargs['ti']
+    """Logs XComs for all tasks in the current DAG run."""
+    tasks = ti.xcom_pull(task_ids="unzip_iccf_archive")
+    logger.info(f"XComs for DAG: {tasks}")
+    if tasks is None:
+        logger.info("No XComs found.")
+        return
+    for task_id in tasks:
+        logger.info(f"Task-ID: {task_id}")
+        xcom_value = ti.xcom_pull(task_ids=task_id)
+        logger.info(f"Task ID: {task_id}, XCom Value: {xcom_value}")
 
 # Define the DAG
-with DAG(
-    'hello_world_dag',  # DAG ID
-    default_args=default_args,
-    description='A simple Hello World DAG',
+dag = DAG(
+    'hello_world_dag',
+    description='Hello World',
     schedule_interval=None,  # Manual trigger only
     start_date=datetime(2025, 1, 1),
-    catchup=False,  # Do not run past scheduled tasks
-) as dag:
+    catchup=False,
+)
 
-    # Define a Python function for the task
-    def say_hello():
-        logger.info("Start_task 'say_hello'") 
-
-    # Create a PythonOperator task
-    hello_task = PythonOperator(
-        task_id='say_hello',  # Task ID
-        python_callable=say_hello,  # Python function to execute
-    )
-
-    # Task dependencies (not needed here as there's only one task)
-    hello_task
+log_xcom_task = PythonOperator(
+    task_id='log_all_xcoms',
+    python_callable=log_all_xcoms,
+    provide_context=True,
+    dag=dag,
+)

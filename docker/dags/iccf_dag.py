@@ -22,7 +22,7 @@ UNZIP_FOLDER = os.path.join(VOLUME_IMPORT, config.get("FOLDER_IMPORT"))
 
 logger.info(f"Download folder: {DOWNLOAD_FOLDER}, Unzip folder: {UNZIP_FOLDER}")
 DEFAULT_LAST_YEAR = 2024
-DEFAULT_LAST_MONTH = 11
+DEFAULT_LAST_MONTH = 12
 
 def get_last_downloaded_date(**kwargs):
     """
@@ -34,6 +34,7 @@ def get_last_downloaded_date(**kwargs):
 
     if last_year is None or last_month is None:
         logger.info(f"No Month/Year Keys stored; using Defaults")
+        push_keys(ti, DEFAULT_LAST_MONTH, DEFAULT_LAST_YEAR)    
         return DEFAULT_LAST_MONTH, DEFAULT_LAST_YEAR
 
     return int(last_month), int(last_year)
@@ -54,8 +55,8 @@ def get_next_month_year(**kwargs):
     return next_month, next_year
 
 def get_month_year_keys(ti):
-    year = ti.xcom_pull(key='iccf_last_year', task_ids='check_and_download_iccf')
-    month = ti.xcom_pull(key='iccf_last_month', task_ids='check_and_download_iccf')
+    year = ti.xcom_pull(key='iccf_last_year')
+    month = ti.xcom_pull(key='iccf_last_month')
     logger.info(f"Keys {month} {year}")
     return month, year
 
@@ -89,6 +90,10 @@ def unzip_iccf_archive(**kwargs):
     logger.info(f"Unzipping ICCF archive. Looking for {next_archive_name}")
     ti = kwargs['ti']
     downloaded_file = os.path.join(DOWNLOAD_FOLDER, next_archive_name)
+
+    if not os.path.exists(downloaded_file):
+        logger.info(f"Downloaded file {downloaded_file} does not exist")
+        return  
 
     try:
         unzip_file(downloaded_file, UNZIP_FOLDER)
