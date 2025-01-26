@@ -1,5 +1,11 @@
 FROM apache/airflow:2.7.2-python3.9
 USER root
 COPY requirements.txt /requirements.txt
+USER airflow
 RUN pip install --no-cache-dir -r /requirements.txt
+
+# Install zstd
+USER root
+RUN apt-get update && apt-get install -y zstd
+
 USER airflow

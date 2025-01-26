@@ -2,13 +2,19 @@
 
 # Usage: ./process_file.sh input_path output_folder chunk_size output_base
 
+echo "Parameters: $1 $2 $3 $4"
+
 INPUT_PATH=$1
 OUTPUT_FOLDER=$2
 CHUNK_SIZE=$3
 OUTPUT_BASE=$4
 
+echo "Start"
+
 # Create output directory if it doesn't exist
 mkdir -p "$OUTPUT_FOLDER"
+
+echo "Output folder created"    
 
 # Decompress and split the file
 zstdcat "$INPUT_PATH" | split -b "$CHUNK_SIZE" - "$OUTPUT_BASE"_part_.json

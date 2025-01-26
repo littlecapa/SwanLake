@@ -38,21 +38,26 @@ def unzst_and_split(**kwargs):
 
     input_path = os.path.join(DOWNLOAD_FOLDER, filename)
     output_base = os.path.join(UNZIP_FOLDER, filename.replace(".zst", ""))
-
     
     # Call the shell script
-    script_path = "./scripts/unzst.sh"
+    script_path = "/opt/airflow/dags/scripts/unzst.sh"
+    if not os.path.exists(script_path):
+        logger.error(f"Script {script_path} not found.")
+        raise
     chunk_size = str(CHUNK_SIZE)
 
     try:
-        subprocess.run(
+        result = subprocess.run(
             [script_path, input_path, UNZIP_FOLDER, chunk_size, output_base],
-            check=True
+            check=True,
+            capture_output=True,
+            text=True
         )
-        logger.info(f"File {filename} successfully decompressed and split.")
+        logger.info(f"Exit Code: {result.returncode}, Message: {result.stdout}, Error: {result.stderr}") 
+        if result.stderr:
+            raise Exception(f"Error occurred during file processing: {result.stderr}") 
     except subprocess.CalledProcessError as e:
         logger.error(f"Error occurred during file processing: {e}")
-
 
 def align_json_files(**kwargs):
     if 1==1:
